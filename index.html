@@ -230,13 +230,24 @@
       text-align: center; padding: 2.5rem 2rem;
     }
     .remain-digits {
+      display: flex;
+      align-items: baseline;
+      justify-content: center;
+      gap: 0.12em;
+      line-height: 1;
+    }
+    .remain-prefix, .remain-suffix {
+      font-size: clamp(1.1rem, 3vw, 1.8rem);
+      font-weight: 500;
+      color: rgba(255, 255, 255, 0.65);
+      letter-spacing: 0.04em;
+    }
+    .remain-number {
       font-size: clamp(4.5rem, 15vw, 9rem);
       font-weight: 800;
-      font-variant-numeric: tabular-nums;
-      letter-spacing: 0.02em;
-      line-height: 1;
       color: #fff;
-      font-family: "Helvetica Neue", "Arial", "DIN Alternate", "Segoe UI", system-ui, sans-serif;
+      font-variant-numeric: tabular-nums;
+      font-family: "Helvetica Neue", "Arial", "DIN Alternate", system-ui, sans-serif;
     }
     .remain-label {
       font-size: clamp(0.85rem, 2vw, 1rem);
@@ -315,7 +326,7 @@
     }
 
     @media (min-width: 1200px) {
-      .remain-digits { font-size: 10rem; }
+      .remain-number { font-size: 10rem; }
     }
 
     @keyframes fadeUp {
@@ -398,12 +409,13 @@
         </div>
         <div class="cell cell-remain">
           <div class="remain-digits">
-            <span id="remain-minutes">0</span>
+            <span class="remain-prefix" id="remain-prefix"></span>
+            <span class="remain-number" id="remain-value">0</span>
+            <span class="remain-suffix" id="remain-suffix"></span>
           </div>
-          <div class="remain-label" id="remain-label">还剩 0 分钟</div>
+          <div class="remain-label" id="remain-label"></div>
         </div>
         <div class="cell cell-bottom">
-          <div class="bottom-status" id="activity">等待中</div>
           <div class="progress-wrap">
             <div class="progress-track">
               <div class="progress-fill" id="bar"></div>
@@ -506,26 +518,43 @@
       var durationMs = end.getTime() - start.getTime();
       var elapsedMs = now.getTime() - start.getTime();
       var remainMs = end.getTime() - now.getTime();
-      var activity = "", totalMinutes = 0, elapsedMinutes = 0, progress = 0, remainSeconds = 0;
+      var prefix = "", suffix = "", remainValue = "", progress = 0;
 
       if (now < start) {
-        totalMinutes = Math.ceil(diff / MS_PER_MINUTE);
-        activity = "距离开始";
+        var mins = Math.ceil(diff / MS_PER_MINUTE);
+        prefix = "距离考试开始还有";
+        suffix = "分钟";
+        remainValue = mins;
       } else if (now < end) {
-        totalMinutes = Math.ceil(remainMs / MS_PER_MINUTE);
-        remainSeconds = Math.ceil(remainMs / 1000);
-        elapsedMinutes = Math.floor(elapsedMs / MS_PER_MINUTE);
-        activity = "已经过去";
+        var remainSec = Math.ceil(remainMs / 1000);
         progress = Math.min(100, (elapsedMs / durationMs) * 100);
+        if (remainSec <= 300) {
+          var m = Math.floor(remainSec / 60);
+          var s = remainSec % 60;
+          prefix = "距离考试结束还有";
+          suffix = "";
+          remainValue = m + ":" + String(s).padStart(2, "0");
+        } else {
+          prefix = "距离考试结束还有";
+          suffix = "分钟";
+          remainValue = Math.ceil(remainMs / MS_PER_MINUTE);
+        }
       } else {
-        totalMinutes = 0;
-        remainSeconds = 0;
-        elapsedMinutes = Math.floor(durationMs / MS_PER_MINUTE);
-        activity = "考试结束";
+        prefix = "考试已结束";
+        suffix = "分钟";
+        remainValue = Math.floor(durationMs / MS_PER_MINUTE);
         progress = 100;
       }
 
-      return { totalMinutes: totalMinutes, elapsedMinutes: elapsedMinutes, remainSeconds: remainSeconds, activity: activity, progress: progress, durationText: fmtHM(start) + " ~ " + fmtHM(end) };
+      return {
+        prefix: prefix,
+        suffix: suffix,
+        remainValue: remainValue,
+        progress: progress,
+        durationText: fmtHM(start) + " ~ " + fmtHM(end),
+        start: start,
+        end: end
+      };
     }
 
     var timerId = null;
@@ -533,17 +562,30 @@
     function startClock(subject, start, end) {
       function tick() {
         var s = computeState(new Date(), subject, start, end);
-        document.getElementById("remain-minutes").textContent = s.totalMinutes;
-        document.getElementById("remain-label").textContent = s.activity === "考试结束" ? "考试结束" : "还剩 " + s.totalMinutes + " 分钟";
-        if (s.activity === "考试结束") {
-          document.getElementById("activity").textContent = "考试结束";
-        } else if (s.remainSeconds <= 300 && s.activity === "已经过去") {
-          var m = Math.floor(s.remainSeconds / 60);
-          var sec = s.remainSeconds % 60;
-          document.getElementById("activity").textContent = m + ":" + String(sec).padStart(2, "0") + " 结束";
+        document.getElementById("remain-prefix").textContent = s.prefix;
+        document.getElementById("remain-value").textContent = s.remainValue;
+        document.getElementById("remain-suffix").textContent = s.suffix;
+
+        var now = new Date();
+        var remainMs = end.getTime() - now.getTime();
+        var remainSec = Math.ceil(remainMs / 1000);
+        var label = "";
+        if (now < start) {
+          label = "将于 " + fmtHM(start) + " 开始";
+        } else if (now < end) {
+          var elapsedMs = now.getTime() - start.getTime();
+          var elapsedMin = Math.floor(elapsedMs / MS_PER_MINUTE);
+          if (remainSec <= 300) {
+            var m = Math.floor(remainSec / 60);
+            var sec = remainSec % 60;
+            label = m + ":" + String(sec).padStart(2, "0") + " 结束";
+          } else {
+            label = "已进行 " + elapsedMin + " 分钟";
+          }
         } else {
-          document.getElementById("activity").textContent = "已经过去 " + s.elapsedMinutes + " 分钟";
+          label = "于 " + fmtHM(end) + " 结束";
         }
+        document.getElementById("remain-label").textContent = label;
         document.getElementById("bar").style.width = s.progress + "%";
         document.getElementById("progress-text").textContent = Math.round(s.progress) + "%";
         timerId = setTimeout(tick, 1000);
