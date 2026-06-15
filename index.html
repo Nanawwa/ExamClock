@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>五柳学校考试倒计时</title>
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --glass-bg: rgba(255, 255, 255, 0.06);
+      --glass-border: rgba(255, 255, 255, 0.12);
+      --glass-blur: 20px;
+      --text-primary: #ffffff;
+      --text-secondary: rgba(255, 255, 255, 0.7);
+      --text-dim: rgba(255, 255, 255, 0.4);
+      --accent: #4fc3f7;
+      --error: #ef5350;
+      --radius: 20px;
+      --radius-sm: 12px;
+    }
+
+    html, body {
+      height: 100%;
+      font-family: "SF Pro Display", "Inter", "Noto Sans SC", -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+      color: var(--text-primary);
+      overflow: hidden;
+    }
+
+    /* 背景双层淡入淡出 */
+    .bg-layer {
+      position: fixed; inset: 0;
+      background-size: cover;
+      background-position: center;
+      background-attachment: fixed;
+      transition: opacity 2s ease-in-out;
+    }
+    #bg-a { z-index: -2; }
+    #bg-b { z-index: -1; opacity: 0; }
+
+    #overlay {
+      position: fixed; inset: 0;
+      background: rgba(0, 0, 0, 0.45);
+      backdrop-filter: blur(6px) saturate(100%);
+      -webkit-backdrop-filter: blur(6px) saturate(100%);
+      z-index: 0;
+    }
+
+    #app {
+      position: relative; z-index: 1;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      min-height: 100vh; padding: 1.5rem;
+    }
+
+    #header {
+      position: fixed; top: 0; left: 0; right: 0;
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 1.2rem 2rem; z-index: 10;
+    }
+    #header .school-name {
+      font-size: 1.15rem; font-weight: 600; letter-spacing: 0.06em;
+      color: var(--text-primary);
+    }
+
+    #btn-fullscreen {
+      background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12);
+      color: var(--text-secondary); font-size: 1.1rem; width: 2.8rem; height: 2.8rem;
+      border-radius: var(--radius-sm); cursor: pointer; transition: all 0.25s;
+      display: flex; align-items: center; justify-content: center;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+      min-width: 48px; min-height: 48px;
+    }
+    #btn-fullscreen:hover { color: var(--text-primary); background: rgba(255,255,255,0.15); }
+    #btn-fullscreen:active { transform: scale(0.92); }
+
+    .glass {
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      border-radius: var(--radius);
+      backdrop-filter: blur(var(--glass-blur));
+      -webkit-backdrop-filter: blur(var(--glass-blur));
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    }
+
+    .hidden { display: none !important; }
+
+    /* ===== 表单面板 ===== */
+    #form-panel {
+      width: min(92vw, 400px);
+      padding: 2.5rem 2rem;
+      animation: fadeUp 0.4s ease-out;
+    }
+    #form-panel h2 {
+      font-size: 1.4rem; font-weight: 600; margin-bottom: 1.8rem;
+    }
+
+    .field { margin-bottom: 1.1rem; }
+    .field-label {
+      display: block; font-size: 0.78rem; font-weight: 500;
+      color: var(--text-dim); margin-bottom: 0.4rem;
+      text-transform: uppercase; letter-spacing: 0.06em;
+    }
+    .field input, .field select {
+      width: 100%; padding: 0.85rem 1rem;
+      border: 1px solid rgba(255,255,255,0.08); border-radius: 10px;
+      background: rgba(255,255,255,0.04); color: var(--text-primary);
+      font-size: 1rem; outline: none; transition: all 0.2s;
+      font-family: inherit;
+      min-height: 48px;
+    }
+    .field input:focus, .field select:focus {
+      border-color: rgba(79, 195, 247, 0.5);
+      box-shadow: 0 0 0 3px rgba(79, 195, 247, 0.12);
+    }
+    .field input::placeholder { color: rgba(255,255,255,0.2); }
+    .field input[type="date"]::-webkit-calendar-picker-indicator,
+    .field input[type="time"]::-webkit-calendar-picker-indicator { filter: invert(0.7); opacity: 0.5; }
+
+    .field select {
+      appearance: none; -webkit-appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='rgba(255,255,255,0.4)' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 1rem center;
+      padding-right: 2.5rem;
+    }
+    .field select option { background: #1a1a2e; color: #fff; }
+
+    /* 科目快捷标签 */
+    .quick-tags { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.6rem; }
+    .quick-tag {
+      padding: 0.5rem 0.85rem; border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 8px; background: rgba(255,255,255,0.03);
+      color: var(--text-dim); font-size: 0.85rem; cursor: pointer;
+      transition: all 0.2s; font-family: inherit;
+      min-height: 42px;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+    }
+    .quick-tag:hover { border-color: rgba(79,195,247,0.4); color: var(--text-secondary); }
+    .quick-tag:active { transform: scale(0.95); }
+    .quick-tag.active { border-color: var(--accent); color: var(--accent); background: rgba(79,195,247,0.1); }
+
+    /* 时长快捷标签 */
+    .dur-tags { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.6rem; }
+    .dur-tag {
+      padding: 0.45rem 0.75rem; border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 8px; background: rgba(255,255,255,0.03);
+      color: var(--text-dim); font-size: 0.8rem; cursor: pointer;
+      transition: all 0.2s; font-family: inherit;
+      min-height: 40px;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+    }
+    .dur-tag:hover { border-color: rgba(79,195,247,0.4); color: var(--text-secondary); }
+    .dur-tag:active { transform: scale(0.95); }
+    .dur-tag.active { border-color: var(--accent); color: var(--accent); background: rgba(79,195,247,0.1); }
+
+    .dur-custom-row {
+      display: flex; align-items: center; gap: 0.5rem;
+      margin-top: 0.4rem;
+    }
+    .dur-custom-row label {
+      font-size: 0.78rem; color: var(--text-dim); white-space: nowrap;
+    }
+    .dur-custom-input {
+      width: 80px !important; padding: 0.5rem 0.6rem !important;
+      text-align: center; font-size: 0.95rem !important;
+    }
+
+    .field-error { color: var(--error); font-size: 0.78rem; margin-top: 0.3rem; }
+
+    .field-row { display: flex; gap: 0.8rem; }
+    .field-row .field { flex: 1; }
+
+    .btn-go {
+      width: 100%; padding: 0.9rem; border: none; border-radius: 10px;
+      background: linear-gradient(135deg, #4fc3f7 0%, #29b6f6 100%);
+      color: #0a0a1a; font-size: 1rem; font-weight: 700;
+      cursor: pointer; transition: all 0.2s; margin-top: 0.3rem;
+      min-height: 52px;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+    }
+    .btn-go:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(79, 195, 247, 0.3); }
+    .btn-go:active { transform: scale(0.97); }
+
+    /* ===== 时钟面板 ===== */
+    #clock-panel {
+      width: min(94vw, 780px);
+      animation: fadeUp 0.5s ease-out;
+    }
+
+    .clock-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1px;
+      background: rgba(255,255,255,0.04);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+
+    .cell {
+      padding: 1.8rem 2.2rem;
+      display: flex; flex-direction: column; justify-content: center;
+      background: rgba(10, 10, 26, 0.65);
+      backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+    }
+
+    .cell-label {
+      font-size: 0.72rem; font-weight: 500; text-transform: uppercase;
+      letter-spacing: 0.1em; color: var(--text-dim); margin-bottom: 0.5rem;
+    }
+
+    .cell-value { font-weight: 600; line-height: 1.2; }
+
+    .cell-subject { grid-column: 1; grid-row: 1; }
+    .cell-subject .cell-value { font-size: clamp(1.6rem, 4vw, 2.2rem); font-weight: 700; }
+
+    .cell-duration { grid-column: 2; grid-row: 1; text-align: right; }
+    .cell-duration .cell-value {
+      font-size: clamp(1rem, 2.2vw, 1.2rem);
+      color: var(--text-secondary);
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* 中心剩余时间 */
+    .cell-remain {
+      grid-column: 1 / -1; grid-row: 2;
+      text-align: center; padding: 2.5rem 2rem;
+    }
+    .remain-digits {
+      font-size: clamp(4.5rem, 15vw, 9rem);
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: 0.02em;
+      line-height: 1;
+      color: #fff;
+      font-family: "Helvetica Neue", "Arial", "DIN Alternate", "Segoe UI", system-ui, sans-serif;
+    }
+    .remain-sep {
+      display: inline-block;
+      width: 0.35em;
+      text-align: center;
+      color: rgba(255,255,255,0.25);
+      font-weight: 300;
+    }
+    .remain-label {
+      font-size: clamp(0.85rem, 2vw, 1rem);
+      color: var(--text-dim);
+      margin-top: 0.8rem;
+      font-weight: 400;
+      letter-spacing: 0.08em;
+    }
+
+    /* 底栏 */
+    .cell-bottom {
+      grid-column: 1 / -1; grid-row: 3;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 1.2rem 2.2rem;
+      gap: 1.5rem;
+    }
+
+    .bottom-status {
+      font-size: clamp(0.85rem, 1.8vw, 1rem);
+      color: var(--text-secondary);
+      font-weight: 500;
+      white-space: nowrap;
+    }
+
+    .progress-wrap { flex: 1; max-width: 280px; }
+    .progress-track {
+      height: 5px; background: rgba(255,255,255,0.06);
+      border-radius: 3px; overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%; width: 0%;
+      background: linear-gradient(90deg, #4fc3f7, #29b6f6);
+      border-radius: 3px; transition: width 1.5s ease;
+    }
+    .progress-pct {
+      font-size: 0.75rem; color: var(--text-dim);
+      margin-top: 0.35rem; font-variant-numeric: tabular-nums;
+      text-align: right;
+    }
+
+    .bottom-school {
+      font-size: 0.78rem; color: var(--text-dim);
+      white-space: nowrap; letter-spacing: 0.04em;
+    }
+
+    .btn-back {
+      display: block; margin: 1.2rem auto 0;
+      padding: 0.7rem 2rem; border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 10px; background: rgba(255,255,255,0.04);
+      color: var(--text-dim); font-size: 0.85rem; font-weight: 500;
+      cursor: pointer; transition: all 0.2s;
+      min-height: 48px;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+    }
+    .btn-back:hover { color: var(--text-primary); border-color: rgba(255,255,255,0.2); background: rgba(255,255,255,0.08); }
+    .btn-back:active { transform: scale(0.96); }
+
+    @media (max-width: 600px) {
+      #header { padding: 1rem; }
+      .cell { padding: 1.2rem 1rem; }
+      .cell-remain { padding: 1.8rem 1rem; }
+      .cell-bottom { padding: 1rem; flex-wrap: wrap; justify-content: center; }
+      .progress-wrap { max-width: 100%; width: 100%; }
+      #form-panel { padding: 2rem 1.5rem; }
+      .quick-tag, .dur-tag { min-height: 44px; padding: 0.55rem 0.9rem; font-size: 0.88rem; }
+      .btn-go { min-height: 56px; font-size: 1.05rem; }
+    }
+
+    /* 触摸设备优化 */
+    @media (hover: none) and (pointer: coarse) {
+      .quick-tag, .dur-tag { min-height: 48px; }
+      .btn-go { min-height: 56px; }
+      #btn-fullscreen { min-width: 52px; min-height: 52px; }
+      .field input, .field select { min-height: 52px; font-size: 1rem; }
+    }
+
+    @media (min-width: 1200px) {
+      .remain-digits { font-size: 10rem; }
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(16px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+</head>
+<body>
+  <div class="bg-layer" id="bg-a"></div>
+  <div class="bg-layer" id="bg-b"></div>
+  <div id="overlay"></div>
+
+  <div id="app">
+    <header id="header">
+      <span class="school-name">五柳学校考试倒计时</span>
+      <button id="btn-fullscreen" title="全屏">⛶</button>
+    </header>
+
+    <section id="form-panel" class="glass">
+      <h2>添加考试</h2>
+      <form id="exam-form">
+        <div class="field" id="group-subject">
+          <span class="field-label">科目</span>
+          <div class="quick-tags" id="quick-tags">
+            <button type="button" class="quick-tag" data-subj="语文">语文</button>
+            <button type="button" class="quick-tag" data-subj="数学">数学</button>
+            <button type="button" class="quick-tag" data-subj="英语">英语</button>
+            <button type="button" class="quick-tag" data-subj="物理">物理</button>
+            <button type="button" class="quick-tag" data-subj="化学">化学</button>
+            <button type="button" class="quick-tag" data-subj="生物">生物</button>
+            <button type="button" class="quick-tag" data-subj="政治">政治</button>
+            <button type="button" class="quick-tag" data-subj="历史">历史</button>
+            <button type="button" class="quick-tag" data-subj="地理">地理</button>
+          </div>
+          <input type="text" id="input-subject" placeholder="或手动输入科目名称">
+        </div>
+        <div class="field-row">
+          <div class="field" id="group-date">
+            <label class="field-label" for="input-date">日期</label>
+            <input type="date" id="input-date" required>
+          </div>
+          <div class="field" id="group-start">
+            <label class="field-label" for="input-start">开始时间</label>
+            <input type="time" id="input-start" required>
+          </div>
+        </div>
+        <div class="field" id="group-duration">
+          <span class="field-label">考试时长</span>
+          <div class="dur-tags" id="dur-tags">
+            <button type="button" class="dur-tag" data-dur="30">30 分钟</button>
+            <button type="button" class="dur-tag" data-dur="40">40 分钟</button>
+            <button type="button" class="dur-tag" data-dur="45">45 分钟</button>
+            <button type="button" class="dur-tag" data-dur="60">60 分钟</button>
+            <button type="button" class="dur-tag active" data-dur="90">90 分钟</button>
+            <button type="button" class="dur-tag" data-dur="120">120 分钟</button>
+            <button type="button" class="dur-tag" data-dur="150">150 分钟</button>
+          </div>
+          <div class="dur-custom-row">
+            <label for="input-duration">自定义：</label>
+            <input type="number" id="input-duration" class="dur-custom-input" min="1" max="300" placeholder="分钟" value="90">
+          </div>
+        </div>
+        <button type="submit" class="btn-go">开始倒计时</button>
+      </form>
+    </section>
+
+    <section id="clock-panel" class="hidden">
+      <div class="clock-grid glass">
+        <div class="cell cell-subject">
+          <div class="cell-label">科目</div>
+          <div class="cell-value" id="subject"></div>
+        </div>
+        <div class="cell cell-duration">
+          <div class="cell-label">考试时段</div>
+          <div class="cell-value" id="duration"></div>
+        </div>
+        <div class="cell cell-remain">
+          <div class="remain-digits">
+            <span id="remain-h">0</span><span class="remain-sep">:</span><span id="remain-m">00</span>
+          </div>
+          <div class="remain-label" id="remain-label">距离开始</div>
+        </div>
+        <div class="cell cell-bottom">
+          <div class="bottom-status" id="activity">等待中</div>
+          <div class="progress-wrap">
+            <div class="progress-track">
+              <div class="progress-fill" id="bar"></div>
+            </div>
+            <div class="progress-pct" id="progress-text">0%</div>
+          </div>
+          <div class="bottom-school">五柳学校</div>
+        </div>
+      </div>
+      <button id="back-to-form" class="btn-back">← 修改考试</button>
+    </section>
+  </div>
+
+  <script>
+  (function () {
+    var MS_PER_MINUTE = 60000;
+
+    /* ===== 背景图淡入淡出轮换 ===== */
+    var bgImages = [
+      "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1920&q=80",
+      "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=1920&q=80",
+      "https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=1920&q=80",
+      "https://images.unsplash.com/photo-1472214103451-9374bd1c798e?w=1920&q=80",
+      "https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=1920&q=80",
+      "https://images.unsplash.com/photo-1519681393784-d120267933ba?w=1920&q=80",
+      "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=1920&q=80",
+      "https://images.unsplash.com/photo-1500534623283-312aade485b7?w=1920&q=80",
+      "https://images.unsplash.com/photo-1433086966358-54859d0ed716?w=1920&q=80",
+      "https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=1920&q=80"
+    ];
+    var bgTimer = null;
+    var activeLayer = "a";
+
+    function showBg(url) {
+      var outgoing = document.getElementById("bg-" + activeLayer);
+      var incoming = document.getElementById("bg-" + (activeLayer === "a" ? "b" : "a"));
+      incoming.style.backgroundImage = "url(" + url + ")";
+      incoming.style.opacity = "1";
+      outgoing.style.opacity = "0";
+      activeLayer = activeLayer === "a" ? "b" : "a";
+    }
+
+    function randomBg() {
+      var idx = Math.floor(Math.random() * bgImages.length);
+      showBg(bgImages[idx]);
+    }
+
+    function startBgRotation() {
+      randomBg();
+      bgTimer = setInterval(randomBg, 30000);
+    }
+
+    function stopBgRotation() {
+      if (bgTimer) { clearInterval(bgTimer); bgTimer = null; }
+    }
+
+    startBgRotation();
+
+    /* ===== 工具 ===== */
+    function todayStr() {
+      var d = new Date();
+      return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+    }
+
+    function fmtHM(date) {
+      return date.getHours() + ":" + String(date.getMinutes()).padStart(2, "0");
+    }
+
+    /* ===== 科目快捷选择 ===== */
+    var quickTags = document.querySelectorAll(".quick-tag");
+    var subjectInput = document.getElementById("input-subject");
+    for (var i = 0; i < quickTags.length; i++) {
+      quickTags[i].addEventListener("click", function () {
+        for (var j = 0; j < quickTags.length; j++) quickTags[j].classList.remove("active");
+        this.classList.add("active");
+        subjectInput.value = this.getAttribute("data-subj");
+      });
+    }
+
+    /* ===== 时长快捷选择 + 自定义输入 ===== */
+    var durTags = document.querySelectorAll(".dur-tag");
+    var durInput = document.getElementById("input-duration");
+    for (var i = 0; i < durTags.length; i++) {
+      durTags[i].addEventListener("click", function () {
+        for (var j = 0; j < durTags.length; j++) durTags[j].classList.remove("active");
+        this.classList.add("active");
+        durInput.value = this.getAttribute("data-dur");
+      });
+    }
+    durInput.addEventListener("input", function () {
+      var val = this.value;
+      for (var j = 0; j < durTags.length; j++) {
+        durTags[j].classList.toggle("active", durTags[j].getAttribute("data-dur") === val);
+      }
+    });
+
+    /* ===== 时钟 ===== */
+    function computeState(now, subject, start, end) {
+      var diff = start.getTime() - now.getTime();
+      var durationMs = end.getTime() - start.getTime();
+      var elapsedMs = now.getTime() - start.getTime();
+      var remainMs = end.getTime() - now.getTime();
+      var activity = "", h = 0, m = 0, progress = 0;
+
+      if (now < start) {
+        var t = Math.ceil(diff / MS_PER_MINUTE);
+        h = Math.floor(t / 60); m = t % 60;
+        activity = "距离开始";
+      } else if (now < end) {
+        var t2 = Math.ceil(remainMs / MS_PER_MINUTE);
+        h = Math.floor(t2 / 60); m = t2 % 60;
+        var eMin = Math.floor(elapsedMs / MS_PER_MINUTE);
+        activity = elapsedMs < durationMs / 2
+          ? "已经过 " + eMin + " 分钟"
+          : "距离结束";
+        progress = Math.min(100, (elapsedMs / durationMs) * 100);
+      } else {
+        activity = "考试结束"; progress = 100;
+      }
+
+      return { h: h, m: m, activity: activity, progress: progress, durationText: fmtHM(start) + " ~ " + fmtHM(end) };
+    }
+
+    var timerId = null;
+
+    function startClock(subject, start, end) {
+      function tick() {
+        var s = computeState(new Date(), subject, start, end);
+        document.getElementById("remain-h").textContent = s.h;
+        document.getElementById("remain-m").textContent = String(s.m).padStart(2, "0");
+        document.getElementById("remain-label").textContent = s.activity;
+        document.getElementById("activity").textContent = s.activity;
+        document.getElementById("bar").style.width = s.progress + "%";
+        document.getElementById("progress-text").textContent = Math.round(s.progress) + "%";
+        timerId = setTimeout(tick, 1000);
+      }
+      tick();
+    }
+
+    function stopClock() {
+      if (timerId !== null) { clearTimeout(timerId); timerId = null; }
+    }
+
+    /* ===== 表单 ===== */
+    function showError(id, msg) {
+      var g = document.getElementById(id);
+      if (!g) return;
+      var e = g.querySelector(".field-error");
+      if (!e) { e = document.createElement("p"); e.className = "field-error"; g.appendChild(e); }
+      e.textContent = msg;
+    }
+    function clearErrors() {
+      var errs = document.querySelectorAll(".field-error");
+      for (var i = 0; i < errs.length; i++) errs[i].remove();
+    }
+
+    var dateEl = document.getElementById("input-date");
+    var startEl = document.getElementById("input-start");
+    var durationEl = document.getElementById("input-duration");
+    var subjectEl = document.getElementById("input-subject");
+    var form = document.getElementById("exam-form");
+    var formPanel = document.getElementById("form-panel");
+    var clockPanel = document.getElementById("clock-panel");
+
+    dateEl.value = todayStr();
+
+    form.addEventListener("submit", function (e) {
+      e.preventDefault();
+      clearErrors();
+      var subject = subjectEl.value.trim();
+      var dateVal = dateEl.value;
+      var startVal = startEl.value;
+      var dur = parseInt(durationEl.value, 10);
+
+      if (!subject) { showError("group-subject", "请输入或选择科目"); return; }
+      if (!dateVal) { showError("group-date", "请选择日期"); return; }
+      if (!startVal) { showError("group-start", "请选择开始时间"); return; }
+
+      var start = new Date(dateVal + "T" + startVal + ":00");
+      var end = new Date(start.getTime() + dur * MS_PER_MINUTE);
+
+      if (isNaN(start.getTime())) { showError("group-start", "时间格式无效"); return; }
+      if (end <= new Date()) { showError("group-start", "考试时间已过"); return; }
+
+      stopBgRotation();
+      formPanel.classList.add("hidden");
+      clockPanel.classList.remove("hidden");
+
+      document.getElementById("subject").textContent = subject;
+      document.getElementById("duration").textContent = fmtHM(start) + " ~ " + fmtHM(end);
+
+      stopClock();
+      startClock(subject, start, end);
+    });
+
+    document.getElementById("back-to-form").addEventListener("click", function () {
+      stopClock();
+      startBgRotation();
+      clockPanel.classList.add("hidden");
+      formPanel.classList.remove("hidden");
+    });
+
+    document.getElementById("btn-fullscreen").addEventListener("click", function () {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(function () {});
+      } else {
+        document.exitFullscreen();
+      }
+    });
+  })();
+  </script>
+</body>
+</html>
