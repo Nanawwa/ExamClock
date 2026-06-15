@@ -238,13 +238,6 @@
       color: #fff;
       font-family: "Helvetica Neue", "Arial", "DIN Alternate", "Segoe UI", system-ui, sans-serif;
     }
-    .remain-sep {
-      display: inline-block;
-      width: 0.35em;
-      text-align: center;
-      color: rgba(255,255,255,0.25);
-      font-weight: 300;
-    }
     .remain-label {
       font-size: clamp(0.85rem, 2vw, 1rem);
       color: var(--text-dim);
@@ -402,9 +395,9 @@
         </div>
         <div class="cell cell-remain">
           <div class="remain-digits">
-            <span id="remain-h">0</span><span class="remain-sep">:</span><span id="remain-m">00</span>
+            <span id="remain-minutes">0</span>
           </div>
-          <div class="remain-label" id="remain-label">距离开始</div>
+          <div class="remain-label" id="remain-label">还剩 0 分钟</div>
         </div>
         <div class="cell cell-bottom">
           <div class="bottom-status" id="activity">等待中</div>
@@ -510,25 +503,22 @@
       var durationMs = end.getTime() - start.getTime();
       var elapsedMs = now.getTime() - start.getTime();
       var remainMs = end.getTime() - now.getTime();
-      var activity = "", h = 0, m = 0, progress = 0;
+      var activity = "", totalMinutes = 0, progress = 0;
 
       if (now < start) {
-        var t = Math.ceil(diff / MS_PER_MINUTE);
-        h = Math.floor(t / 60); m = t % 60;
+        totalMinutes = Math.ceil(diff / MS_PER_MINUTE);
         activity = "距离开始";
       } else if (now < end) {
-        var t2 = Math.ceil(remainMs / MS_PER_MINUTE);
-        h = Math.floor(t2 / 60); m = t2 % 60;
-        var eMin = Math.floor(elapsedMs / MS_PER_MINUTE);
-        activity = elapsedMs < durationMs / 2
-          ? "已经过 " + eMin + " 分钟"
-          : "距离结束";
+        totalMinutes = Math.ceil(remainMs / MS_PER_MINUTE);
+        activity = "距离结束";
         progress = Math.min(100, (elapsedMs / durationMs) * 100);
       } else {
-        activity = "考试结束"; progress = 100;
+        totalMinutes = 0;
+        activity = "考试结束";
+        progress = 100;
       }
 
-      return { h: h, m: m, activity: activity, progress: progress, durationText: fmtHM(start) + " ~ " + fmtHM(end) };
+      return { totalMinutes: totalMinutes, activity: activity, progress: progress, durationText: fmtHM(start) + " ~ " + fmtHM(end) };
     }
 
     var timerId = null;
@@ -536,9 +526,8 @@
     function startClock(subject, start, end) {
       function tick() {
         var s = computeState(new Date(), subject, start, end);
-        document.getElementById("remain-h").textContent = s.h;
-        document.getElementById("remain-m").textContent = String(s.m).padStart(2, "0");
-        document.getElementById("remain-label").textContent = s.activity;
+        document.getElementById("remain-minutes").textContent = s.totalMinutes;
+        document.getElementById("remain-label").textContent = s.activity === "考试结束" ? "考试结束" : "还剩 " + s.totalMinutes + " 分钟";
         document.getElementById("activity").textContent = s.activity;
         document.getElementById("bar").style.width = s.progress + "%";
         document.getElementById("progress-text").textContent = Math.round(s.progress) + "%";
