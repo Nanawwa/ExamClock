@@ -506,24 +506,26 @@
       var durationMs = end.getTime() - start.getTime();
       var elapsedMs = now.getTime() - start.getTime();
       var remainMs = end.getTime() - now.getTime();
-      var activity = "", totalMinutes = 0, elapsedMinutes = 0, progress = 0;
+      var activity = "", totalMinutes = 0, elapsedMinutes = 0, progress = 0, remainSeconds = 0;
 
       if (now < start) {
         totalMinutes = Math.ceil(diff / MS_PER_MINUTE);
         activity = "距离开始";
       } else if (now < end) {
         totalMinutes = Math.ceil(remainMs / MS_PER_MINUTE);
+        remainSeconds = Math.ceil(remainMs / 1000);
         elapsedMinutes = Math.floor(elapsedMs / MS_PER_MINUTE);
         activity = "已经过去";
         progress = Math.min(100, (elapsedMs / durationMs) * 100);
       } else {
         totalMinutes = 0;
+        remainSeconds = 0;
         elapsedMinutes = Math.floor(durationMs / MS_PER_MINUTE);
         activity = "考试结束";
         progress = 100;
       }
 
-      return { totalMinutes: totalMinutes, elapsedMinutes: elapsedMinutes, activity: activity, progress: progress, durationText: fmtHM(start) + " ~ " + fmtHM(end) };
+      return { totalMinutes: totalMinutes, elapsedMinutes: elapsedMinutes, remainSeconds: remainSeconds, activity: activity, progress: progress, durationText: fmtHM(start) + " ~ " + fmtHM(end) };
     }
 
     var timerId = null;
@@ -533,7 +535,15 @@
         var s = computeState(new Date(), subject, start, end);
         document.getElementById("remain-minutes").textContent = s.totalMinutes;
         document.getElementById("remain-label").textContent = s.activity === "考试结束" ? "考试结束" : "还剩 " + s.totalMinutes + " 分钟";
-        document.getElementById("activity").textContent = s.activity === "考试结束" ? "考试结束" : "已经过去 " + s.elapsedMinutes + " 分钟";
+        if (s.activity === "考试结束") {
+          document.getElementById("activity").textContent = "考试结束";
+        } else if (s.remainSeconds <= 300 && s.activity === "已经过去") {
+          var m = Math.floor(s.remainSeconds / 60);
+          var sec = s.remainSeconds % 60;
+          document.getElementById("activity").textContent = m + ":" + String(sec).padStart(2, "0") + " 结束";
+        } else {
+          document.getElementById("activity").textContent = "已经过去 " + s.elapsedMinutes + " 分钟";
+        }
         document.getElementById("bar").style.width = s.progress + "%";
         document.getElementById("progress-text").textContent = Math.round(s.progress) + "%";
         timerId = setTimeout(tick, 1000);
